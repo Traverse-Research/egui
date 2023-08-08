@@ -207,7 +207,8 @@ pub struct Plot {
     label_formatter: LabelFormatter,
     coordinates_formatter: Option<(Corner, CoordinatesFormatter)>,
     axis_formatters: [AxisFormatter; 2],
-    x_axis_has_priority: bool,
+    x_axis_origin_label_has_priority: bool,
+    axes_text_stroke_override: [Option<Stroke>; 2],
     legend_config: Option<Legend>,
     show_background: bool,
     show_axes: [bool; 2],
@@ -250,7 +251,8 @@ impl Plot {
             label_formatter: None,
             coordinates_formatter: None,
             axis_formatters: [None, None], // [None; 2] requires Copy
-            x_axis_has_priority: true,
+            x_axis_origin_label_has_priority: true,
+            axes_text_stroke_override: [None, None],
             legend_config: None,
             show_background: true,
             show_axes: [true; 2],
@@ -447,10 +449,26 @@ impl Plot {
         self
     }
 
-    /// Set the priority rank of the X axis. Default: `true`.
-    /// This defines which label has display priority when an overlap is possible between the two axes.
-    pub fn x_axis_has_high_priority(mut self, val: bool) -> Self {
-        self.x_axis_has_priority = val;
+    /// Set the priority of the X axis origin label. Default: `true`.
+    /// This defines which label has display priority when resolving the overlapping of the origin (0.0) labels.
+    pub fn x_axis_origin_label_has_priority(mut self, val: bool) -> Self {
+        self.x_axis_origin_label_has_priority = val;
+        self
+    }
+
+    /// Overrides the default behaviour of the X axis' text rendering.
+    /// Instead of calculating the color of the stroke using the spacing calculations, always use the color provided in the stroke.
+    /// The `width` field is used as a replacement for the `Shape`'s strenght, which is used to determine which shape is drawn on top.
+    pub fn x_axis_text_stroke_override(mut self, stroke: Stroke) -> Self {
+        self.axes_text_stroke_override[0] = Some(stroke);
+        self
+    }
+
+    /// Overrides the default behaviour of the X axis' text rendering.
+    /// Instead of calculating the color of the stroke using the spacing calculations, always use the color provided in the stroke.
+    /// The `width` field is used as a replacement for the `Shape`'s strenght, which is used to determine which shape is drawn on top.
+    pub fn y_axis_text_stroke_override(mut self, stroke: Stroke) -> Self {
+        self.axes_text_stroke_override[1] = Some(stroke);
         self
     }
 
@@ -625,7 +643,8 @@ impl Plot {
             label_formatter,
             coordinates_formatter,
             axis_formatters,
-            x_axis_has_priority,
+            x_axis_origin_label_has_priority,
+            axes_text_stroke_override,
             legend_config,
             reset,
             show_background,
@@ -978,7 +997,8 @@ impl Plot {
             sharp_grid_lines,
             clamp_grid,
 
-            x_axis_has_priority,
+            x_axis_origin_label_has_priority,
+            axes_text_stroke_override,
         };
         let plot_cursors = prepared.ui(ui, &response);
 
@@ -1270,6 +1290,7 @@ pub struct GridInput {
 }
 
 /// One mark (horizontal or vertical line) in the background grid of a plot.
+#[derive(Debug)]
 pub struct GridMark {
     /// X or Y value in the plot.
     pub value: f64,
@@ -1342,7 +1363,8 @@ struct PreparedPlot {
     sharp_grid_lines: bool,
     clamp_grid: bool,
 
-    x_axis_has_priority: bool,
+    x_axis_origin_label_has_priority: bool,
+    axes_text_stroke_override: [Option<Stroke>; 2],
 }
 
 impl PreparedPlot {
@@ -1543,9 +1565,14 @@ impl PreparedPlot {
 
             const MIN_TEXT_SPACING: f32 = 40.0;
             if spacing_in_points > MIN_TEXT_SPACING {
-                let text_strength =
-                    remap_clamp(spacing_in_points, MIN_TEXT_SPACING..=150.0, 0.0..=1.0);
-                let color = color_from_contrast(ui, text_strength);
+                let (strength, color) = if let Some(stroke) = self.axes_text_stroke_override[axis] {
+                    (stroke.width, stroke.color)
+                } else {
+                    let text_strength =
+                        remap_clamp(spacing_in_points, MIN_TEXT_SPACING..=150.0, 0.0..=1.0);
+                    let color = color_from_contrast(ui, text_strength);
+                    (text_strength, color)
+                };
 
                 let text: String = if let Some(formatter) = axis_formatters[axis].as_deref() {
                     formatter(value_main, &axis_range)
@@ -1553,11 +1580,8 @@ impl PreparedPlot {
                     emath::round_to_decimals(value_main, 5).to_string() // hack
                 };
 
-                // Skip origin label for y-axis if x-axis is already showing it (otherwise displayed twice)
-
                 // Skip origin label for the axis that doesn't have priority, if the axis with priority is already showing it (otherwise it's displayed twice)
-                let priority_axis_idx = !self.x_axis_has_priority as usize;
-
+                let priority_axis_idx = !self.x_axis_origin_label_has_priority as usize;
                 let skip_low_priority_origin =
                     axis != priority_axis_idx && other_axis_shown && value_main == 0.0;
 
@@ -1572,7 +1596,7 @@ impl PreparedPlot {
                         .at_most(transform.frame().max[1 - axis] - galley.size()[1 - axis] - 2.0)
                         .at_least(transform.frame().min[1 - axis] + 1.0);
 
-                    shapes.push((Shape::galley(text_pos, galley), text_strength));
+                    shapes.push((Shape::galley(text_pos, galley), strength));
                 }
             }
         }
