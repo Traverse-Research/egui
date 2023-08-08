@@ -207,6 +207,7 @@ pub struct Plot {
     label_formatter: LabelFormatter,
     coordinates_formatter: Option<(Corner, CoordinatesFormatter)>,
     axis_formatters: [AxisFormatter; 2],
+    x_axis_has_priority: bool,
     legend_config: Option<Legend>,
     show_background: bool,
     show_axes: [bool; 2],
@@ -249,6 +250,7 @@ impl Plot {
             label_formatter: None,
             coordinates_formatter: None,
             axis_formatters: [None, None], // [None; 2] requires Copy
+            x_axis_has_priority: true,
             legend_config: None,
             show_background: true,
             show_axes: [true; 2],
@@ -445,6 +447,13 @@ impl Plot {
         self
     }
 
+    /// Set the priority rank of the X axis. Default: `true`.
+    /// This defines which label has display priority when an overlap is possible between the two axes.
+    pub fn x_axis_has_high_priority(mut self, val: bool) -> Self {
+        self.x_axis_has_priority = val;
+        self
+    }
+
     /// Configure how the grid in the background is spaced apart along the X axis.
     ///
     /// Default is a log-10 grid, i.e. every plot unit is divided into 10 other units.
@@ -616,6 +625,7 @@ impl Plot {
             label_formatter,
             coordinates_formatter,
             axis_formatters,
+            x_axis_has_priority,
             legend_config,
             reset,
             show_background,
@@ -967,6 +977,8 @@ impl Plot {
             grid_spacers,
             sharp_grid_lines,
             clamp_grid,
+
+            x_axis_has_priority,
         };
         let plot_cursors = prepared.ui(ui, &response);
 
@@ -1329,6 +1341,8 @@ struct PreparedPlot {
     grid_spacers: [GridSpacer; 2],
     sharp_grid_lines: bool,
     clamp_grid: bool,
+
+    x_axis_has_priority: bool,
 }
 
 impl PreparedPlot {
@@ -1540,10 +1554,15 @@ impl PreparedPlot {
                 };
 
                 // Skip origin label for y-axis if x-axis is already showing it (otherwise displayed twice)
-                let skip_origin_y = axis == 1 && other_axis_shown && value_main == 0.0;
+
+                // Skip origin label for the axis that doesn't have priority, if the axis with priority is already showing it (otherwise it's displayed twice)
+                let priority_axis_idx = !self.x_axis_has_priority as usize;
+
+                let skip_low_priority_origin =
+                    axis != priority_axis_idx && other_axis_shown && value_main == 0.0;
 
                 // Custom formatters can return empty string to signal "no label at this resolution"
-                if !text.is_empty() && !skip_origin_y {
+                if !text.is_empty() && !skip_low_priority_origin {
                     let galley = ui.painter().layout_no_wrap(text, font_id.clone(), color);
 
                     let mut text_pos = pos_in_gui + vec2(1.0, -galley.size().y);
