@@ -1566,6 +1566,7 @@ impl PreparedPlot {
             const MIN_TEXT_SPACING: f32 = 40.0;
             if spacing_in_points > MIN_TEXT_SPACING {
                 let (strength, color) = if let Some(stroke) = self.axes_text_stroke_override[axis] {
+                    // bit of a hack...
                     (stroke.width, stroke.color)
                 } else {
                     let text_strength =
