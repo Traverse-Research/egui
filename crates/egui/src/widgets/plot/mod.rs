@@ -208,7 +208,7 @@ pub struct Plot {
     coordinates_formatter: Option<(Corner, CoordinatesFormatter)>,
     axis_formatters: [AxisFormatter; 2],
     x_axis_origin_label_has_priority: bool,
-    axes_text_stroke_override: [Option<Stroke>; 2],
+    axes_text_stroke_overrides: [Option<Stroke>; 2],
     legend_config: Option<Legend>,
     show_background: bool,
     show_axes: [bool; 2],
@@ -252,7 +252,7 @@ impl Plot {
             coordinates_formatter: None,
             axis_formatters: [None, None], // [None; 2] requires Copy
             x_axis_origin_label_has_priority: true,
-            axes_text_stroke_override: [None, None],
+            axes_text_stroke_overrides: [None, None],
             legend_config: None,
             show_background: true,
             show_axes: [true; 2],
@@ -460,7 +460,7 @@ impl Plot {
     /// Instead of calculating the color of the stroke using the spacing calculations, always use the color provided in the stroke.
     /// The `width` field is used as a replacement for the `Shape`'s strength, which is used to determine which shape is drawn on top.
     pub fn x_axis_text_stroke_override(mut self, stroke: Stroke) -> Self {
-        self.axes_text_stroke_override[0] = Some(stroke);
+        self.axes_text_stroke_overrides[0] = Some(stroke);
         self
     }
 
@@ -468,7 +468,7 @@ impl Plot {
     /// Instead of calculating the color of the stroke using the spacing calculations, always use the color provided in the stroke.
     /// The `width` field is used as a replacement for the `Shape`'s strength, which is used to determine which shape is drawn on top.
     pub fn y_axis_text_stroke_override(mut self, stroke: Stroke) -> Self {
-        self.axes_text_stroke_override[1] = Some(stroke);
+        self.axes_text_stroke_overrides[1] = Some(stroke);
         self
     }
 
@@ -644,7 +644,7 @@ impl Plot {
             coordinates_formatter,
             axis_formatters,
             x_axis_origin_label_has_priority,
-            axes_text_stroke_override,
+            axes_text_stroke_overrides,
             legend_config,
             reset,
             show_background,
@@ -998,7 +998,7 @@ impl Plot {
             clamp_grid,
 
             x_axis_origin_label_has_priority,
-            axes_text_stroke_override,
+            axes_text_stroke_overrides,
         };
         let plot_cursors = prepared.ui(ui, &response);
 
@@ -1364,7 +1364,7 @@ struct PreparedPlot {
     clamp_grid: bool,
 
     x_axis_origin_label_has_priority: bool,
-    axes_text_stroke_override: [Option<Stroke>; 2],
+    axes_text_stroke_overrides: [Option<Stroke>; 2],
 }
 
 impl PreparedPlot {
@@ -1565,7 +1565,8 @@ impl PreparedPlot {
 
             const MIN_TEXT_SPACING: f32 = 40.0;
             if spacing_in_points > MIN_TEXT_SPACING {
-                let (strength, color) = if let Some(stroke) = self.axes_text_stroke_override[axis] {
+                let (strength, color) = if let Some(stroke) = self.axes_text_stroke_overrides[axis]
+                {
                     // bit of a hack...
                     (stroke.width, stroke.color)
                 } else {
@@ -1582,7 +1583,11 @@ impl PreparedPlot {
                 };
 
                 // Skip origin label for the axis that doesn't have priority, if the axis with priority is already showing it (otherwise it's displayed twice)
-                let priority_axis_idx = !self.x_axis_origin_label_has_priority as usize;
+                let priority_axis_idx = if self.x_axis_origin_label_has_priority {
+                    0
+                } else {
+                    1
+                };
                 let skip_low_priority_origin =
                     axis != priority_axis_idx && other_axis_shown && value_main == 0.0;
 
