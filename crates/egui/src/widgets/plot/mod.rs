@@ -458,7 +458,7 @@ impl Plot {
 
     /// Overrides the default behaviour of the X axis' text rendering.
     /// Instead of calculating the color of the stroke using the spacing calculations, always use the color provided in the stroke.
-    /// The `width` field is used as a replacement for the `Shape`'s strenght, which is used to determine which shape is drawn on top.
+    /// The `width` field is used as a replacement for the `Shape`'s strength, which is used to determine which shape is drawn on top.
     pub fn x_axis_text_stroke_override(mut self, stroke: Stroke) -> Self {
         self.axes_text_stroke_override[0] = Some(stroke);
         self
@@ -466,7 +466,7 @@ impl Plot {
 
     /// Overrides the default behaviour of the X axis' text rendering.
     /// Instead of calculating the color of the stroke using the spacing calculations, always use the color provided in the stroke.
-    /// The `width` field is used as a replacement for the `Shape`'s strenght, which is used to determine which shape is drawn on top.
+    /// The `width` field is used as a replacement for the `Shape`'s strength, which is used to determine which shape is drawn on top.
     pub fn y_axis_text_stroke_override(mut self, stroke: Stroke) -> Self {
         self.axes_text_stroke_override[1] = Some(stroke);
         self

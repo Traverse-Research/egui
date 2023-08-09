@@ -542,7 +542,7 @@ pub struct Table<'a> {
 
 /// Returned from [`Table::body`]. Contains information about the way the table has been built by the context.
 pub struct TableOutput {
-    /// The response recieved upon the creation of the table's header, if one was defined.
+    /// The response received upon the creation of the table's header, if one was defined.
     pub header_response: Option<Response>,
 
     /// The output of the [`ScrollArea`] containing the table body's contents.
