@@ -208,7 +208,7 @@ pub struct Plot {
     coordinates_formatter: Option<(Corner, CoordinatesFormatter)>,
     axis_formatters: [AxisFormatter; 2],
     x_axis_origin_label_has_priority: bool,
-    axes_text_stroke_overrides: [Option<Stroke>; 2],
+    axis_text_use_adaptive_contrast: [bool; 2],
     legend_config: Option<Legend>,
     show_background: bool,
     show_axes: [bool; 2],
@@ -252,7 +252,7 @@ impl Plot {
             coordinates_formatter: None,
             axis_formatters: [None, None], // [None; 2] requires Copy
             x_axis_origin_label_has_priority: true,
-            axes_text_stroke_overrides: [None, None],
+            axis_text_use_adaptive_contrast: [true, true],
             legend_config: None,
             show_background: true,
             show_axes: [true; 2],
@@ -457,18 +457,18 @@ impl Plot {
     }
 
     /// Overrides the default behaviour of the X axis' text rendering.
-    /// Instead of calculating the color of the stroke using the spacing calculations, always use the color provided in the stroke.
-    /// The `width` field is used as a replacement for the `Shape`'s strength, which is used to determine which shape is drawn on top.
-    pub fn x_axis_text_stroke_override(mut self, stroke: Stroke) -> Self {
-        self.axes_text_stroke_overrides[0] = Some(stroke);
+    /// Always use the ui foreground color instead of calculating the color of the stroke using the `color_from_contrast` calculations,
+    /// which blends the background and foreground colors according to a defined contrast
+    pub fn x_axis_text_adaptive_contrast(mut self, val: bool) -> Self {
+        self.axis_text_use_adaptive_contrast[0] = val;
         self
     }
 
-    /// Overrides the default behaviour of the X axis' text rendering.
-    /// Instead of calculating the color of the stroke using the spacing calculations, always use the color provided in the stroke.
-    /// The `width` field is used as a replacement for the `Shape`'s strength, which is used to determine which shape is drawn on top.
-    pub fn y_axis_text_stroke_override(mut self, stroke: Stroke) -> Self {
-        self.axes_text_stroke_overrides[1] = Some(stroke);
+    /// Overrides the default behaviour of the Y axis' text rendering.
+    /// Always use the ui foreground color instead of calculating the color of the stroke using the `color_from_contrast` calculations,
+    /// which blends the background and foreground colors according to a defined contrast
+    pub fn y_axis_text_adaptive_contrast(mut self, val: bool) -> Self {
+        self.axis_text_use_adaptive_contrast[1] = val;
         self
     }
 
@@ -644,7 +644,7 @@ impl Plot {
             coordinates_formatter,
             axis_formatters,
             x_axis_origin_label_has_priority,
-            axes_text_stroke_overrides,
+            axis_text_use_adaptive_contrast,
             legend_config,
             reset,
             show_background,
@@ -998,7 +998,7 @@ impl Plot {
             clamp_grid,
 
             x_axis_origin_label_has_priority,
-            axes_text_stroke_overrides,
+            axis_text_use_adaptive_contrast,
         };
         let plot_cursors = prepared.ui(ui, &response);
 
@@ -1364,7 +1364,7 @@ struct PreparedPlot {
     clamp_grid: bool,
 
     x_axis_origin_label_has_priority: bool,
-    axes_text_stroke_overrides: [Option<Stroke>; 2],
+    axis_text_use_adaptive_contrast: [bool; 2],
 }
 
 impl PreparedPlot {
@@ -1565,15 +1565,13 @@ impl PreparedPlot {
 
             const MIN_TEXT_SPACING: f32 = 40.0;
             if spacing_in_points > MIN_TEXT_SPACING {
-                let (strength, color) = if let Some(stroke) = self.axes_text_stroke_overrides[axis]
-                {
-                    // bit of a hack...
-                    (stroke.width, stroke.color)
+                let text_strength =
+                    remap_clamp(spacing_in_points, MIN_TEXT_SPACING..=150.0, 0.0..=1.0);
+
+                let color = if self.axis_text_use_adaptive_contrast[axis] {
+                    color_from_contrast(ui, text_strength)
                 } else {
-                    let text_strength =
-                        remap_clamp(spacing_in_points, MIN_TEXT_SPACING..=150.0, 0.0..=1.0);
-                    let color = color_from_contrast(ui, text_strength);
-                    (text_strength, color)
+                    ui.visuals().widgets.open.fg_stroke.color
                 };
 
                 let text: String = if let Some(formatter) = axis_formatters[axis].as_deref() {
@@ -1602,7 +1600,7 @@ impl PreparedPlot {
                         .at_most(transform.frame().max[1 - axis] - galley.size()[1 - axis] - 2.0)
                         .at_least(transform.frame().min[1 - axis] + 1.0);
 
-                    shapes.push((Shape::galley(text_pos, galley), strength));
+                    shapes.push((Shape::galley(text_pos, galley), text_strength));
                 }
             }
         }
