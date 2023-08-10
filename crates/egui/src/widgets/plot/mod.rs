@@ -207,6 +207,8 @@ pub struct Plot {
     label_formatter: LabelFormatter,
     coordinates_formatter: Option<(Corner, CoordinatesFormatter)>,
     axis_formatters: [AxisFormatter; 2],
+    x_axis_origin_label_has_priority: bool,
+    axis_text_use_adaptive_contrast: [bool; 2],
     legend_config: Option<Legend>,
     show_background: bool,
     show_axes: [bool; 2],
@@ -249,6 +251,8 @@ impl Plot {
             label_formatter: None,
             coordinates_formatter: None,
             axis_formatters: [None, None], // [None; 2] requires Copy
+            x_axis_origin_label_has_priority: true,
+            axis_text_use_adaptive_contrast: [true, true],
             legend_config: None,
             show_background: true,
             show_axes: [true; 2],
@@ -445,6 +449,29 @@ impl Plot {
         self
     }
 
+    /// Set the priority of the X axis origin label. Default: `true`.
+    /// This defines which label has display priority when resolving the overlapping of the origin (0.0) labels.
+    pub fn x_axis_origin_label_has_priority(mut self, val: bool) -> Self {
+        self.x_axis_origin_label_has_priority = val;
+        self
+    }
+
+    /// Overrides the default behaviour of the X axis' text rendering.
+    /// Always use the ui foreground color instead of calculating the color of the stroke using the `color_from_contrast` calculations,
+    /// which blends the background and foreground colors according to a defined contrast
+    pub fn x_axis_text_adaptive_contrast(mut self, val: bool) -> Self {
+        self.axis_text_use_adaptive_contrast[0] = val;
+        self
+    }
+
+    /// Overrides the default behaviour of the Y axis' text rendering.
+    /// Always use the ui foreground color instead of calculating the color of the stroke using the `color_from_contrast` calculations,
+    /// which blends the background and foreground colors according to a defined contrast
+    pub fn y_axis_text_adaptive_contrast(mut self, val: bool) -> Self {
+        self.axis_text_use_adaptive_contrast[1] = val;
+        self
+    }
+
     /// Configure how the grid in the background is spaced apart along the X axis.
     ///
     /// Default is a log-10 grid, i.e. every plot unit is divided into 10 other units.
@@ -616,6 +643,8 @@ impl Plot {
             label_formatter,
             coordinates_formatter,
             axis_formatters,
+            x_axis_origin_label_has_priority,
+            axis_text_use_adaptive_contrast,
             legend_config,
             reset,
             show_background,
@@ -967,6 +996,9 @@ impl Plot {
             grid_spacers,
             sharp_grid_lines,
             clamp_grid,
+
+            x_axis_origin_label_has_priority,
+            axis_text_use_adaptive_contrast,
         };
         let plot_cursors = prepared.ui(ui, &response);
 
@@ -1258,6 +1290,7 @@ pub struct GridInput {
 }
 
 /// One mark (horizontal or vertical line) in the background grid of a plot.
+#[derive(Debug)]
 pub struct GridMark {
     /// X or Y value in the plot.
     pub value: f64,
@@ -1329,6 +1362,9 @@ struct PreparedPlot {
     grid_spacers: [GridSpacer; 2],
     sharp_grid_lines: bool,
     clamp_grid: bool,
+
+    x_axis_origin_label_has_priority: bool,
+    axis_text_use_adaptive_contrast: [bool; 2],
 }
 
 impl PreparedPlot {
@@ -1531,7 +1567,12 @@ impl PreparedPlot {
             if spacing_in_points > MIN_TEXT_SPACING {
                 let text_strength =
                     remap_clamp(spacing_in_points, MIN_TEXT_SPACING..=150.0, 0.0..=1.0);
-                let color = color_from_contrast(ui, text_strength);
+
+                let color = if self.axis_text_use_adaptive_contrast[axis] {
+                    color_from_contrast(ui, text_strength)
+                } else {
+                    ui.visuals().widgets.open.fg_stroke.color
+                };
 
                 let text: String = if let Some(formatter) = axis_formatters[axis].as_deref() {
                     formatter(value_main, &axis_range)
@@ -1539,11 +1580,17 @@ impl PreparedPlot {
                     emath::round_to_decimals(value_main, 5).to_string() // hack
                 };
 
-                // Skip origin label for y-axis if x-axis is already showing it (otherwise displayed twice)
-                let skip_origin_y = axis == 1 && other_axis_shown && value_main == 0.0;
+                // Skip origin label for the axis that doesn't have priority, if the axis with priority is already showing it (otherwise it's displayed twice)
+                let priority_axis_idx = if self.x_axis_origin_label_has_priority {
+                    0
+                } else {
+                    1
+                };
+                let skip_low_priority_origin =
+                    axis != priority_axis_idx && other_axis_shown && value_main == 0.0;
 
                 // Custom formatters can return empty string to signal "no label at this resolution"
-                if !text.is_empty() && !skip_origin_y {
+                if !text.is_empty() && !skip_low_priority_origin {
                     let galley = ui.painter().layout_no_wrap(text, font_id.clone(), color);
 
                     let mut text_pos = pos_in_gui + vec2(1.0, -galley.size().y);
