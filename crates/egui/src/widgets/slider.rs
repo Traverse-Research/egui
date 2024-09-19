@@ -90,6 +90,7 @@ pub struct Slider<'a> {
     handle_shape: Option<HandleShape>,
 
     rail_color: Option<Color32>,
+    thickness: Option<f32>,
 }
 
 impl<'a> Slider<'a> {
@@ -139,6 +140,7 @@ impl<'a> Slider<'a> {
             handle_shape: None,
 
             rail_color: None,
+            thickness: None,
         }
     }
 
@@ -529,6 +531,13 @@ impl<'a> Slider<'a> {
         self
     }
 
+    /// Override slider thickness.
+    #[inline]
+    pub fn thickness(mut self, thickness: f32) -> Self {
+        self.thickness = Some(thickness);
+        self
+    }
+
     fn get_value(&mut self) -> f64 {
         let value = get(&mut self.get_set_value);
         if self.clamp_to_range {
@@ -865,9 +874,10 @@ impl<'a> Slider<'a> {
     fn add_contents(&mut self, ui: &mut Ui) -> Response {
         let old_value = self.get_value();
 
-        let thickness = ui
-            .text_style_height(&TextStyle::Body)
-            .at_least(ui.spacing().interact_size.y);
+        let thickness = self.thickness.unwrap_or_else(|| {
+            ui.text_style_height(&TextStyle::Body)
+                .at_least(ui.spacing().interact_size.y)
+        });
         let mut response = self.allocate_slider_space(ui, thickness);
         self.slider_ui(ui, &response);
 
