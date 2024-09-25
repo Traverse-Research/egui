@@ -391,6 +391,7 @@ pub struct Line {
     pub(super) name: String,
     pub(super) highlight: bool,
     pub(super) fill: Option<f32>,
+    pub(super) fill_alpha: f32,
     pub(super) style: LineStyle,
     id: Option<Id>,
 }
@@ -403,6 +404,7 @@ impl Line {
             name: Default::default(),
             highlight: false,
             fill: None,
+            fill_alpha: DEFAULT_FILL_ALPHA,
             style: LineStyle::Solid,
             id: None,
         }
@@ -447,6 +449,13 @@ impl Line {
     #[inline]
     pub fn style(mut self, style: LineStyle) -> Self {
         self.style = style;
+        self
+    }
+
+    /// Set the fill area's alpha channel. Default is `0.05`.
+    #[inline]
+    pub fn fill_alpha(mut self, alpha: impl Into<f32>) -> Self {
+        self.fill_alpha = alpha.into();
         self
     }
 
@@ -501,7 +510,7 @@ impl PlotItem for Line {
             fill = None;
         }
         if let Some(y_reference) = fill {
-            let mut fill_alpha = DEFAULT_FILL_ALPHA;
+            let mut fill_alpha = self.fill_alpha;
             if *highlight {
                 fill_alpha = (2.0 * fill_alpha).at_most(1.0);
             }
