@@ -1943,11 +1943,33 @@ pub(super) fn rulers_at_value(
     };
 
     let font_id = TextStyle::Body.resolve(plot.ui.style());
+
+    // Generate text galley so that we can use its bounds to
+    // properly align the text.
+    let galley = plot.ui.fonts(|f| {
+        f.layout_no_wrap(
+            text.clone(),
+            font_id.clone(),
+            plot.ui.visuals().text_color(),
+        )
+    });
+
+    let rect = plot.transform.frame();
+    let bottom_align = (pointer.y - galley.size().y) > rect.min.y;
+    let left_align = (pointer.x + galley.size().x) > rect.max.x;
+
+    let align = match (left_align, bottom_align) {
+        (false, true) => Align2::LEFT_BOTTOM,
+        (false, false) => Align2::LEFT_TOP,
+        (true, true) => Align2::RIGHT_BOTTOM,
+        (true, false) => Align2::RIGHT_TOP,
+    };
+
     plot.ui.fonts(|f| {
         shapes.push(Shape::text(
             f,
             pointer + vec2(3.0, -2.0),
-            Align2::LEFT_BOTTOM,
+            align,
             text,
             font_id,
             plot.ui.visuals().text_color(),
