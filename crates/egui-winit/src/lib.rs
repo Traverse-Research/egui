@@ -33,19 +33,25 @@ use winit::{
     window::{CursorGrabMode, Window, WindowButtons, WindowLevel},
 };
 
-const OVERRIDE_PIXELS_PER_POINT: f32 = 1.0;
-
 pub fn screen_size_in_pixels(window: &Window) -> egui::Vec2 {
     let size = window.inner_size();
     egui::vec2(size.width as f32, size.height as f32)
 }
 
-/// Calculate the `pixels_per_point` for a given window, given the current egui zoom factor
-pub fn pixels_per_point(egui_ctx: &egui::Context, _window: &Window) -> f32 {
-    // EVOLVE SHIPPING HACK: force native ppp of 1.0.
-    let native_pixels_per_point = OVERRIDE_PIXELS_PER_POINT;
-    // let native_pixels_per_point = window.scale_factor() as f32;
+// EVOLVE SHIPPING HACK: force native ppp of 1.0.
+pub fn native_pixels_per_point(window_scale_factor: f64) -> f32 {
+    const OVERRIDE_PIXELS_PER_POINT: f32 = 1.0;
 
+    if cfg!(target_os = "android") {
+        window_scale_factor as f32
+    } else {
+        OVERRIDE_PIXELS_PER_POINT
+    }
+}
+
+/// Calculate the `pixels_per_point` for a given window, given the current egui zoom factor
+pub fn pixels_per_point(egui_ctx: &egui::Context, window: &Window) -> f32 {
+    let native_pixels_per_point = native_pixels_per_point(window.scale_factor());
     let egui_zoom_factor = egui_ctx.zoom_factor();
     egui_zoom_factor * native_pixels_per_point
 }
@@ -250,7 +256,7 @@ impl State {
             .viewports
             .entry(self.viewport_id)
             .or_default()
-            .native_pixels_per_point = Some(OVERRIDE_PIXELS_PER_POINT);
+            .native_pixels_per_point = Some(native_pixels_per_point(window.scale_factor()));
 
         self.egui_input.take()
     }
@@ -957,7 +963,7 @@ pub fn update_viewport_info(
     viewport_info.fullscreen = Some(window.fullscreen().is_some());
     viewport_info.inner_rect = inner_rect;
     viewport_info.monitor_size = monitor_size;
-    viewport_info.native_pixels_per_point = Some(OVERRIDE_PIXELS_PER_POINT as f32);
+    viewport_info.native_pixels_per_point = Some(native_pixels_per_point(window.scale_factor()));
     viewport_info.outer_rect = outer_rect;
     viewport_info.title = Some(window.title());
 
@@ -1517,7 +1523,7 @@ pub fn create_winit_window_builder<T>(
                 log::debug!("Failed to find a monitor - assuming native_pixels_per_point of 1.0");
                 1.0
             },
-            |_m| OVERRIDE_PIXELS_PER_POINT,
+            |m| native_pixels_per_point(m.scale_factor()),
         );
     let zoom_factor = egui_ctx.zoom_factor();
     let pixels_per_point = zoom_factor * native_pixels_per_point;
