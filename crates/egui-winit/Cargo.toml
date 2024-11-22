@@ -39,6 +39,8 @@ bytemuck = ["egui/bytemuck"]
 ## If disabled a clipboard will be simulated so you can still copy/paste within the egui app.
 clipboard = ["arboard", "smithay-clipboard"]
 
+links = []
+
 ## Enable profiling with the [`puffin`](https://docs.rs/puffin) crate.
 puffin = ["dep:puffin", "egui/puffin"]
 
