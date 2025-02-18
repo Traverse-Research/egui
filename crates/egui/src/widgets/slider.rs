@@ -91,6 +91,8 @@ pub struct Slider<'a> {
 
     rail_color: Option<Color32>,
     thickness: Option<f32>,
+
+    symmetric_slider: bool,
 }
 
 impl<'a> Slider<'a> {
@@ -103,6 +105,26 @@ impl<'a> Slider<'a> {
             }
             value.to_f64()
         });
+
+        if Num::INTEGRAL {
+            slf.integer()
+        } else {
+            slf
+        }
+    }
+
+    /// Creates a new horizontal slider with symmetric values.
+    pub fn new_symmetric<Num: emath::Numeric>(value: &'a mut Num, max_abs_value: Num) -> Self {
+        let abs_value = max_abs_value.to_f64().abs();
+        let range_f64 = -abs_value..=abs_value;
+        let mut slf = Self::from_get_set(range_f64, move |v: Option<f64>| {
+            if let Some(v) = v {
+                *value = Num::from_f64(v);
+            }
+            value.to_f64()
+        });
+
+        slf.symmetric_slider = true;
 
         if Num::INTEGRAL {
             slf.integer()
@@ -141,6 +163,8 @@ impl<'a> Slider<'a> {
 
             rail_color: None,
             thickness: None,
+
+            symmetric_slider: false,
         }
     }
 
@@ -725,10 +749,36 @@ impl<'a> Slider<'a> {
                 let mut trailing_rail_rect = rail_rect;
 
                 // The trailing rect has to be drawn differently depending on the orientation.
-                match self.orientation {
-                    SliderOrientation::Vertical => trailing_rail_rect.min.y = center.y,
-                    SliderOrientation::Horizontal => trailing_rail_rect.max.x = center.x,
-                };
+                if self.symmetric_slider {
+                    let position_at_0 = self.position_from_value(0.0, position_range);
+                    let center_at_0 = self.marker_center(position_at_0, &rail_rect);
+
+                    match self.orientation {
+                        SliderOrientation::Vertical => {
+                            if center.y < center_at_0.y {
+                                trailing_rail_rect.min.y = center.y;
+                                trailing_rail_rect.max.y = center_at_0.y;
+                            } else {
+                                trailing_rail_rect.min.y = center_at_0.y;
+                                trailing_rail_rect.max.y = center.y;
+                            }
+                        }
+                        SliderOrientation::Horizontal => {
+                            if center.x < center_at_0.x {
+                                trailing_rail_rect.min.x = center.x;
+                                trailing_rail_rect.max.x = center_at_0.x;
+                            } else {
+                                trailing_rail_rect.min.x = center_at_0.x;
+                                trailing_rail_rect.max.x = center.x;
+                            }
+                        }
+                    };
+                } else {
+                    match self.orientation {
+                        SliderOrientation::Vertical => trailing_rail_rect.min.y = center.y,
+                        SliderOrientation::Horizontal => trailing_rail_rect.max.x = center.x,
+                    };
+                }
 
                 ui.painter().rect_filled(
                     trailing_rail_rect,

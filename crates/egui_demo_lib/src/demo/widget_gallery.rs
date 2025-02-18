@@ -15,6 +15,7 @@ pub struct WidgetGallery {
     opacity: f32,
     radio: Enum,
     scalar: f32,
+    symmetric_value: f32,
     string: String,
     color: egui::Color32,
     animate_progress_bar: bool,
@@ -33,6 +34,7 @@ impl Default for WidgetGallery {
             boolean: false,
             radio: Enum::First,
             scalar: 42.0,
+            symmetric_value: 0.0,
             string: Default::default(),
             color: egui::Color32::LIGHT_BLUE.linear_multiply(0.5),
             animate_progress_bar: false,
@@ -112,6 +114,7 @@ impl WidgetGallery {
             boolean,
             radio,
             scalar,
+            symmetric_value,
             string,
             color,
             animate_progress_bar,
@@ -181,7 +184,19 @@ impl WidgetGallery {
         ui.end_row();
 
         ui.add(doc_link_label("Slider", "Slider"));
-        ui.add(egui::Slider::new(scalar, 0.0..=360.0).suffix("°"));
+        ui.add(
+            egui::Slider::new(scalar, 0.0..=360.0)
+                .suffix("°")
+                .trailing_fill(true),
+        );
+        ui.end_row();
+
+        ui.add(doc_link_label("Symmetric Slider", "Slider"));
+        ui.add(
+            egui::Slider::new_symmetric(symmetric_value, 90.0)
+                .suffix("°")
+                .trailing_fill(true),
+        );
         ui.end_row();
 
         ui.add(doc_link_label("DragValue", "DragValue"));
