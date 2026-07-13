@@ -38,11 +38,13 @@ pub fn screen_size_in_pixels(window: &Window) -> egui::Vec2 {
     egui::vec2(size.width as f32, size.height as f32)
 }
 
-// EVOLVE SHIPPING HACK: force native ppp of 1.0.
+// EVOLVE SHIPPING HACK: force native ppp of 1.0 on desktop, where Evolve controls
+// UI scale itself. Mobile (Android, iOS) uses the real device scale factor so the
+// UI renders at native DPI and pointer coordinates convert correctly.
 pub fn native_pixels_per_point(window_scale_factor: f64) -> f32 {
     const OVERRIDE_PIXELS_PER_POINT: f32 = 1.0;
 
-    if cfg!(target_os = "android") {
+    if cfg!(any(target_os = "android", target_os = "ios")) {
         window_scale_factor as f32
     } else {
         OVERRIDE_PIXELS_PER_POINT
