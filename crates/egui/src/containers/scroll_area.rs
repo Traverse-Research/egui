@@ -576,7 +576,14 @@ impl ScrollArea {
             // Drag contents to scroll (for touch screens mostly).
             // We must do this BEFORE adding content to the `ScrollArea`,
             // or we will steal input from the widgets we contain.
-            let content_response = ui.interact(inner_rect, id.with("area"), Sense::drag());
+            let content_response = ui.interact(
+                inner_rect,
+                id.with("area"),
+                Sense {
+                    focusable: false,
+                    ..Sense::drag()
+                },
+            );
 
             if content_response.dragged() {
                 for d in 0..2 {
@@ -1009,7 +1016,10 @@ impl Prepared {
 
             let interact_id = id.with(d);
             let sense = if self.scrolling_enabled {
-                Sense::click_and_drag()
+                Sense {
+                    focusable: false,
+                    ..Sense::click_and_drag()
+                }
             } else {
                 Sense::hover()
             };
