@@ -172,7 +172,7 @@ impl CubicBezierShape {
         }
     }
 
-    // copied from lyon::geom::flattern_cubic.rs
+    // copied from lyon::geom::flatten_cubic.rs
     // Computes the number of quadratic bézier segments to approximate a cubic one.
     // Derived by Raph Levien from section 10.6 of Sedeberg's CAGD notes
     // https://scholarsarchive.byu.edu/cgi/viewcontent.cgi?article=1000&context=facpub#section.10.6
@@ -713,7 +713,7 @@ fn quadratic_for_each_local_extremum<F: FnMut(f32)>(p0: f32, p1: f32, p2: f32, c
 
 fn cubic_for_each_local_extremum<F: FnMut(f32)>(p0: f32, p1: f32, p2: f32, p3: f32, cb: &mut F) {
     // See www.faculty.idc.ac.il/arik/quality/appendixa.html for an explanation
-    // A cubic Bézier curve can be derivated by the following equation:
+    // A cubic Bézier curve can be derived by the following equation:
     // B'(t) = 3(1-t)^2(p1-p0) + 6(1-t)t(p2-p1) + 3t^2(p3-p2) or
     // f(x) = a * x² + b * x + c
     let a = 3.0 * (p3 + 3.0 * (p1 - p2) - p0);

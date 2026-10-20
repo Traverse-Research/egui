@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check spelling of entire workspace
-        uses: crate-ci/typos@master
+        uses: crate-ci/typos@v1.50.2
   # Disabled: too many names of crates and user-names etc
   # spellcheck:
   #   name: Spellcheck

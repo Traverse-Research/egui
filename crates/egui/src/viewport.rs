@@ -19,7 +19,7 @@
 //! ### Deferred viewports
 //! These are created with [`Context::show_viewport_deferred`].
 //! Deferred viewports take a closure that is called by the integration at a later time, perhaps multiple times.
-//! Deferred viewports are repainted independenantly of the parent viewport.
+//! Deferred viewports are repainted independently of the parent viewport.
 //! This means communication with them needs to be done via channels, or `Arc/Mutex`.
 //!
 //! This is the most performant type of child viewport, though a bit more cumbersome to work with compared to immediate viewports.
@@ -1078,7 +1078,7 @@ pub struct ViewportOutput {
     /// since those don't result in real viewports.
     pub class: ViewportClass,
 
-    /// The window attrbiutes such as title, position, size, etc.
+    /// The window attributes such as title, position, size, etc.
     ///
     /// Use this when first constructing the native window.
     /// Also check for changes in it using [`ViewportBuilder::patch`],

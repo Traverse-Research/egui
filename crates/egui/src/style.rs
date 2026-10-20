@@ -478,7 +478,7 @@ impl ScrollStyle {
             active_background_opacity: 1.0,
             active_handle_opacity: 1.0,
 
-            // Be tranlucent when expanded so we can see the content
+            // Be translucent when expanded so we can see the content
             interact_background_opacity: 0.6,
             interact_handle_opacity: 0.6,
 
@@ -642,7 +642,7 @@ pub struct Interaction {
 
     /// Can the user select text that span multiple labels?
     ///
-    /// The default is `true`, but text seelction can be slightly glitchy,
+    /// The default is `true`, but text selection can be slightly glitchy,
     /// so you may want to disable it.
     pub multi_widget_text_select: bool,
 }

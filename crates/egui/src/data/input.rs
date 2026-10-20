@@ -1000,7 +1000,7 @@ impl RawInput {
             focused,
         } = self;
 
-        ui.label(format!("Active viwport: {viewport_id:?}"));
+        ui.label(format!("Active viewport: {viewport_id:?}"));
         for (id, viewport) in viewports {
             ui.group(|ui| {
                 ui.label(format!("Viewport {id:?}"));

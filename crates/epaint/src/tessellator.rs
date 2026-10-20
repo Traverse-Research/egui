@@ -1860,7 +1860,7 @@ impl Tessellator {
         use rayon::prelude::*;
 
         // We only parallelize large/slow stuff, because each tessellation job
-        // will allocate a new Mesh, and so it creates a lot of extra memory framentation
+        // will allocate a new Mesh, and so it creates a lot of extra memory fragmentation
         // and callocations that is only worth it for large shapes.
         fn should_parallelize(shape: &Shape) -> bool {
             match shape {
