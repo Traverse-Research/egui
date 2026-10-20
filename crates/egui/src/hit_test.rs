@@ -373,7 +373,7 @@ mod tests {
         assert_eq!(hits.click.unwrap().id, Id::new("click-and-drag"));
         assert_eq!(hits.drag.unwrap().id, Id::new("click-and-drag"));
 
-        // Close hit - should still ignore the drag-background so as not to confuse the userr:
+        // Close hit - should still ignore the drag-background so as not to confuse the user:
         let hits = hit_test_on_close(&widgets, pos2(105.0, 5.0));
         assert_eq!(hits.click.unwrap().id, Id::new("click-and-drag"));
         assert_eq!(hits.drag.unwrap().id, Id::new("click-and-drag"));
