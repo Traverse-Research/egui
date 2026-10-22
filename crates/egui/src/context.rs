@@ -1026,10 +1026,14 @@ impl Context {
             // but also to know when we have reached the widget we are checking for cover.
             viewport.widgets_this_frame.insert(w.layer_id, w);
 
-            if w.sense.focusable {
+            if w.enabled && w.sense.focusable {
                 ctx.memory.interested_in_focus(w.id);
             }
         });
+
+        if !w.enabled {
+            self.memory_mut(|mem| mem.forget_focus_candidate(w.id));
+        }
 
         if !w.enabled || !w.sense.focusable || !w.layer_id.allow_interaction() {
             // Not interested or allowed input:

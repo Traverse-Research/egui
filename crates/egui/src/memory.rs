@@ -715,6 +715,11 @@ impl Memory {
         self.focus_mut().interested_in_focus(id);
     }
 
+    /// Stops arrow keys from moving focus to a widget that was interested in focus on an earlier frame.
+    pub(crate) fn forget_focus_candidate(&mut self, id: Id) {
+        self.focus_mut().focus_widgets_cache.remove(&id);
+    }
+
     /// Stop editing of active [`TextEdit`](crate::TextEdit) (if any).
     #[inline(always)]
     pub fn stop_text_input(&mut self) {
