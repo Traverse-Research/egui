@@ -715,6 +715,12 @@ impl Memory {
         self.focus_mut().interested_in_focus(id);
     }
 
+    /// Surrenders focus and stops arrow keys from moving focus to this widget, e.g. when it is disabled.
+    pub(crate) fn not_interested_in_focus(&mut self, id: Id) {
+        self.surrender_focus(id);
+        self.focus_mut().focus_widgets_cache.remove(&id);
+    }
+
     /// Stop editing of active [`TextEdit`](crate::TextEdit) (if any).
     #[inline(always)]
     pub fn stop_text_input(&mut self) {
