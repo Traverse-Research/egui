@@ -715,9 +715,8 @@ impl Memory {
         self.focus_mut().interested_in_focus(id);
     }
 
-    /// Surrenders focus and stops arrow keys from moving focus to this widget, e.g. when it is disabled.
-    pub(crate) fn not_interested_in_focus(&mut self, id: Id) {
-        self.surrender_focus(id);
+    /// Stops arrow keys from moving focus to a widget that was interested in focus on an earlier frame.
+    pub(crate) fn forget_focus_candidate(&mut self, id: Id) {
         self.focus_mut().focus_widgets_cache.remove(&id);
     }
 

@@ -1031,9 +1031,13 @@ impl Context {
             }
         });
 
+        if !w.enabled {
+            self.memory_mut(|mem| mem.forget_focus_candidate(w.id));
+        }
+
         if !w.enabled || !w.sense.focusable || !w.layer_id.allow_interaction() {
             // Not interested or allowed input:
-            self.memory_mut(|mem| mem.not_interested_in_focus(w.id));
+            self.memory_mut(|mem| mem.surrender_focus(w.id));
         }
 
         if w.sense.interactive() || w.sense.focusable {
