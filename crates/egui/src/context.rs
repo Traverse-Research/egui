@@ -1031,7 +1031,9 @@ impl Context {
             }
         });
 
-        if !w.enabled || !w.sense.focusable || !w.layer_id.allow_interaction() {
+        // Disabled widgets keep focus so keyboard navigation can pass through them,
+        // but they don't respond to clicks or key presses.
+        if !w.sense.focusable || !w.layer_id.allow_interaction() {
             // Not interested or allowed input:
             self.memory_mut(|mem| mem.surrender_focus(w.id));
         }

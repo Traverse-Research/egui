@@ -382,7 +382,7 @@ impl<'a> Widget for DragValue<'a> {
         // screen readers.
         let is_kb_editing = ui.memory_mut(|mem| {
             mem.interested_in_focus(id);
-            mem.has_focus(id)
+            mem.has_focus(id) && ui.is_enabled()
         });
 
         if ui.memory_mut(|mem| mem.gained_focus(id)) {
