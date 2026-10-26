@@ -585,7 +585,7 @@ impl<'t> TextEdit<'t> {
 
         let mut cursor_range = None;
         let prev_cursor_range = state.cursor.range(&galley);
-        if interactive && ui.memory(|mem| mem.has_focus(id)) {
+        if interactive && ui.is_enabled() && ui.memory(|mem| mem.has_focus(id)) {
             ui.memory_mut(|mem| mem.set_focus_lock_filter(id, event_filter));
 
             let default_cursor_range = if cursor_at_end {
