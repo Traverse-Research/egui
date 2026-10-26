@@ -5,8 +5,8 @@
 use core::ops::RangeInclusive;
 
 use crate::{
-    DragValue, EventFilter, Id, Key, NumExt as _, Pos2, Rangef, Rect, Response, TextStyle, Ui,
-    Vec2, WidgetText, emath, epaint, lerp, pos2, remap, remap_clamp, style, style::HandleShape,
+    Color32, DragValue, EventFilter, Id, Key, NumExt as _, Pos2, Rangef, Rect, Response, TextStyle,
+    Ui, Vec2, WidgetText, emath, epaint, lerp, pos2, remap, remap_clamp, style, style::HandleShape,
     vec2,
 };
 
@@ -216,6 +216,12 @@ pub struct SliderCore<'a> {
 
     /// The shape of the handles. Default: [`crate::style::Visuals::handle_shape`].
     pub handle_shape: Option<HandleShape>,
+
+    /// The color of the rail. Default: the inactive widget background fill.
+    pub rail_color: Option<Color32>,
+
+    /// The size of the rail across its axis. Default: the body text height or interact size.
+    pub thickness: Option<f32>,
 }
 
 impl SliderCore<'_> {
@@ -231,6 +237,8 @@ impl SliderCore<'_> {
             step: None,
             drag_value: DragValueSettings::default(),
             handle_shape: None,
+            rail_color: None,
+            thickness: None,
         }
     }
 
@@ -286,9 +294,10 @@ impl SliderCore<'_> {
 
     /// The space the rail asks for, handles included.
     pub fn desired_size(&self, ui: &Ui) -> Vec2 {
-        let thickness = ui
-            .text_style_height(&TextStyle::Body)
-            .at_least(ui.spacing().interact_size.y);
+        let thickness = self.thickness.unwrap_or_else(|| {
+            ui.text_style_height(&TextStyle::Body)
+                .at_least(ui.spacing().interact_size.y)
+        });
         match self.orientation {
             SliderOrientation::Horizontal => vec2(ui.spacing().slider_width, thickness),
             SliderOrientation::Vertical => vec2(thickness, ui.spacing().slider_width),
@@ -379,7 +388,7 @@ impl SliderCore<'_> {
 // Painting.
 
 /// Paints the rail and returns it, so the caller can line the fill up with it.
-pub fn paint_rail(ui: &Ui, geom: &SliderGeometry) -> Rect {
+pub fn paint_rail(ui: &Ui, geom: &SliderGeometry, rail_color: Option<Color32>) -> Rect {
     let rail_radius = (ui.spacing().slider_rail_height / 2.0).at_least(0.0);
     let rail_rect = geom.rail_rect(rail_radius);
     let widget_visuals = &ui.visuals().widgets;
@@ -387,7 +396,7 @@ pub fn paint_rail(ui: &Ui, geom: &SliderGeometry) -> Rect {
     ui.painter().rect_filled(
         rail_rect,
         widget_visuals.inactive.corner_radius,
-        widget_visuals.inactive.bg_fill,
+        rail_color.unwrap_or(widget_visuals.inactive.bg_fill),
     );
 
     rail_rect

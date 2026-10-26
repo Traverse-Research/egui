@@ -65,6 +65,7 @@ pub struct Slider<'a> {
     get_set_value: GetSetValue<'a>,
     core: SliderCore<'a>,
     trailing_fill: Option<bool>,
+    symmetric: bool,
 }
 
 impl<'a> Slider<'a> {
@@ -90,6 +91,21 @@ impl<'a> Slider<'a> {
         if Num::INTEGRAL { slf.integer() } else { slf }
     }
 
+    /// Creates a new horizontal slider over `-max_abs_value..=max_abs_value`,
+    /// whose trailing fill runs from zero to the handle.
+    pub fn new_symmetric<Num: emath::Numeric>(value: &'a mut Num, max_abs_value: Num) -> Self {
+        let max_abs_value = max_abs_value.to_f64().abs();
+        let mut slf = Self::from_get_set(-max_abs_value..=max_abs_value, move |v: Option<f64>| {
+            if let Some(v) = v {
+                *value = Num::from_f64(v);
+            }
+            value.to_f64()
+        });
+        slf.symmetric = true;
+
+        if Num::INTEGRAL { slf.integer() } else { slf }
+    }
+
     /// Creates a slider over a value that cannot be borrowed directly.
     ///
     /// The closure is called with `None` to read the value and with `Some(new_value)` to write it,
@@ -102,6 +118,7 @@ impl<'a> Slider<'a> {
             get_set_value: Box::new(get_set_value),
             core: SliderCore::new(range),
             trailing_fill: None,
+            symmetric: false,
         }
     }
 
@@ -118,6 +135,20 @@ impl<'a> Slider<'a> {
     #[inline]
     pub fn text(mut self, text: impl Into<WidgetText>) -> Self {
         self.core.text = text.into();
+        self
+    }
+
+    /// Override the color of the rail.
+    #[inline]
+    pub fn rail_color(mut self, color: Color32) -> Self {
+        self.core.rail_color = Some(color);
+        self
+    }
+
+    /// Override the size of the slider across its rail.
+    #[inline]
+    pub fn thickness(mut self, thickness: f32) -> Self {
+        self.core.thickness = Some(thickness);
         self
     }
 
@@ -550,7 +581,7 @@ impl Slider<'_> {
         if ui.is_rect_visible(response.rect) {
             let value = self.get_value();
 
-            let rail_rect = slider_core::paint_rail(ui, &geom);
+            let rail_rect = slider_core::paint_rail(ui, &geom, self.core.rail_color);
             let center = geom.marker_center(geom.position_from_value(value), &rail_rect);
 
             // Decide if we should add trailing fill.
@@ -561,9 +592,17 @@ impl Slider<'_> {
             if trailing_fill {
                 // The fill runs from the start of the rail to the handle. A range slider hands
                 // the same function two handles instead.
-                let span = match self.core.orientation {
-                    SliderOrientation::Horizontal => Rangef::new(rail_rect.left(), center.x),
-                    SliderOrientation::Vertical => Rangef::new(center.y, rail_rect.bottom()),
+                let span = if self.symmetric {
+                    let zero = geom.marker_center(geom.position_from_value(0.0), &rail_rect);
+                    match self.core.orientation {
+                        SliderOrientation::Horizontal => Rangef::new(zero.x, center.x),
+                        SliderOrientation::Vertical => Rangef::new(center.y, zero.y),
+                    }
+                } else {
+                    match self.core.orientation {
+                        SliderOrientation::Horizontal => Rangef::new(rail_rect.left(), center.x),
+                        SliderOrientation::Vertical => Rangef::new(center.y, rail_rect.bottom()),
+                    }
                 };
                 slider_core::paint_fill(ui, rail_rect, span, self.core.orientation);
             }

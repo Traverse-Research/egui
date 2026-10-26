@@ -40,9 +40,11 @@ use dropped_file::NativeFile;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::ElementState,
-    event_loop::ActiveEventLoop,
-    window::{CursorGrabMode, CustomCursor, Window, WindowButtons, WindowLevel},
+    window::{CursorGrabMode, Window, WindowButtons, WindowLevel},
 };
+
+/// Traverse fork: egui-winit is backported to winit 0.29, which has no `ActiveEventLoop`.
+pub type ActiveEventLoop = winit::event_loop::EventLoopWindowTarget<()>;
 
 pub fn screen_size_in_pixels(window: &Window) -> egui::Vec2 {
     let size = if cfg!(target_os = "ios") {
@@ -56,9 +58,22 @@ pub fn screen_size_in_pixels(window: &Window) -> egui::Vec2 {
     egui::vec2(size.width as f32, size.height as f32)
 }
 
+// EVOLVE SHIPPING HACK: force native ppp of 1.0 on desktop, where Evolve controls
+// UI scale itself. Mobile (Android, iOS) uses the real device scale factor so the
+// UI renders at native DPI and pointer coordinates convert correctly.
+pub fn native_pixels_per_point(window_scale_factor: f64) -> f32 {
+    const OVERRIDE_PIXELS_PER_POINT: f32 = 1.0;
+
+    if cfg!(any(target_os = "android", target_os = "ios")) {
+        window_scale_factor as f32
+    } else {
+        OVERRIDE_PIXELS_PER_POINT
+    }
+}
+
 /// Calculate the `pixels_per_point` for a given window, given the current egui zoom factor
 pub fn pixels_per_point(egui_ctx: &egui::Context, window: &Window) -> f32 {
-    let native_pixels_per_point = window.scale_factor() as f32;
+    let native_pixels_per_point = native_pixels_per_point(window.scale_factor());
     let egui_zoom_factor = egui_ctx.zoom_factor();
     egui_zoom_factor * native_pixels_per_point
 }
@@ -103,14 +118,6 @@ pub struct State {
     pointer_pos_in_points: Option<egui::Pos2>,
     any_pointer_button_down: bool,
     current_cursor_icon: Option<egui::CursorIcon>,
-
-    /// Cached `CustomCursor` for the last RGBA bitmap pushed through
-    /// `PlatformOutput::cursor_image`. We dedupe by `Arc::as_ptr` so the
-    /// integration only re-uploads the bitmap to the OS when the app
-    /// switches sprite, not every frame the cursor moves. `usize` is the
-    /// raw pointer of the source `Arc<[u8]>` — opaque, only used as a
-    /// cache key.
-    current_custom_cursor: Option<(usize, CustomCursor)>,
 
     clipboard: clipboard::Clipboard,
 
@@ -183,7 +190,6 @@ impl State {
             pointer_pos_in_points: None,
             any_pointer_button_down: false,
             current_cursor_icon: None,
-            current_custom_cursor: None,
 
             clipboard,
 
@@ -340,7 +346,7 @@ impl State {
             .viewports
             .entry(self.viewport_id)
             .or_default()
-            .native_pixels_per_point = Some(window.scale_factor() as f32);
+            .native_pixels_per_point = Some(native_pixels_per_point(window.scale_factor()));
 
         self.egui_input.take()
     }
@@ -378,7 +384,7 @@ impl State {
 
         match event {
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                let native_pixels_per_point = *scale_factor as f32;
+                let native_pixels_per_point = native_pixels_per_point(*scale_factor);
 
                 self.egui_input
                     .viewports
@@ -589,12 +595,12 @@ impl State {
             // Things we completely ignore:
             WindowEvent::ActivationTokenDone { .. }
             | WindowEvent::AxisMotion { .. }
-            | WindowEvent::DoubleTapGesture { .. } => EventResponse {
+            | WindowEvent::SmartMagnify { .. } => EventResponse {
                 repaint: false,
                 consumed: false,
             },
 
-            WindowEvent::PinchGesture { delta, .. } => {
+            WindowEvent::TouchpadMagnify { delta, .. } => {
                 // Positive delta values indicate magnification (zooming in).
                 // Negative delta values indicate shrinking (zooming out).
                 let zoom_factor = (*delta as f32).exp();
@@ -605,29 +611,13 @@ impl State {
                 }
             }
 
-            WindowEvent::RotationGesture { delta, .. } => {
+            WindowEvent::TouchpadRotate { delta, .. } => {
                 // Positive delta values indicate counterclockwise rotation
                 // Negative delta values indicate clockwise rotation
                 // This is opposite of egui's sign convention for angles
                 self.egui_input
                     .events
                     .push(egui::Event::Rotate(-delta.to_radians()));
-                EventResponse {
-                    repaint: true,
-                    consumed: self.egui_ctx.egui_wants_pointer_input(),
-                }
-            }
-
-            WindowEvent::PanGesture { delta, phase, .. } => {
-                let pixels_per_point = pixels_per_point(&self.egui_ctx, window);
-
-                self.egui_input.events.push(egui::Event::MouseWheel {
-                    unit: egui::MouseWheelUnit::Point,
-                    delta: Vec2::new(delta.x, delta.y) / pixels_per_point,
-                    phase: to_egui_touch_phase(*phase),
-                    source: egui::MouseWheelSource::Trackpad,
-                    modifiers: self.modifiers,
-                });
                 EventResponse {
                     repaint: true,
                     consumed: self.egui_ctx.egui_wants_pointer_input(),
@@ -1332,62 +1322,11 @@ impl State {
         cursor_icon: egui::CursorIcon,
         cursor_image: Option<&egui::CustomCursorImage>,
     ) {
-        let is_pointer_in_window = self.pointer_pos_in_points.is_some();
-        if !is_pointer_in_window {
-            // Drop both caches so the cursor gets re-applied (and the
-            // bitmap re-checked for staleness) once the pointer comes
-            // back. Same contract the old `set_cursor_icon` followed.
-            self.current_cursor_icon = None;
-            self.current_custom_cursor = None;
-            return;
-        }
-
-        // Bitmap cursor wins over CursorIcon when both are present and we
-        // have an event loop to register it with. Otherwise the bitmap is
-        // dropped and we fall through to the icon path — this is the
-        // documented fallback for integrations that didn't opt in.
-        if let (Some(image), Some(event_loop)) = (cursor_image, event_loop) {
-            let key = std::sync::Arc::as_ptr(&image.rgba).cast::<u8>() as usize;
-            let cached = self
-                .current_custom_cursor
-                .as_ref()
-                .filter(|(k, _)| *k == key)
-                .map(|(_, c)| c.clone());
-
-            let custom = match cached {
-                Some(c) => c,
-                None => match winit::window::CustomCursor::from_rgba(
-                    image.rgba.to_vec(),
-                    image.size[0],
-                    image.size[1],
-                    image.hotspot[0],
-                    image.hotspot[1],
-                ) {
-                    Ok(source) => {
-                        let c = event_loop.create_custom_cursor(source);
-                        self.current_custom_cursor = Some((key, c.clone()));
-                        c
-                    }
-                    Err(err) => {
-                        log::warn!(
-                            "egui-winit: invalid cursor bitmap, falling back to cursor_icon: {err:?}"
-                        );
-                        self.current_custom_cursor = None;
-                        self.set_cursor_icon_inner(window, cursor_icon);
-                        return;
-                    }
-                },
-            };
-
-            window.set_cursor_visible(true);
-            window.set_cursor(custom);
-            // Resync `current_cursor_icon` so the next icon-only path
-            // notices a real change rather than dedupe-skipping it.
+        let _ = (event_loop, cursor_image);
+        if self.pointer_pos_in_points.is_none() {
             self.current_cursor_icon = None;
             return;
         }
-
-        self.current_custom_cursor = None;
         self.set_cursor_icon_inner(window, cursor_icon);
     }
 
@@ -1404,7 +1343,7 @@ impl State {
 
         if let Some(winit_cursor_icon) = translate_cursor(cursor_icon) {
             window.set_cursor_visible(true);
-            window.set_cursor(winit_cursor_icon);
+            window.set_cursor_icon(winit_cursor_icon);
         } else {
             window.set_cursor_visible(false);
         }
@@ -1493,7 +1432,7 @@ pub fn update_viewport_info(
     };
 
     viewport_info.title = Some(window.title());
-    viewport_info.native_pixels_per_point = Some(window.scale_factor() as f32);
+    viewport_info.native_pixels_per_point = Some(native_pixels_per_point(window.scale_factor()));
 
     viewport_info.monitor_size = monitor_size;
     viewport_info.inner_rect = inner_rect;
@@ -2200,12 +2139,12 @@ pub fn create_window(
         event_loop,
     );
 
-    let window = event_loop.create_window(window_attributes)?;
+    let window = window_attributes.build(event_loop)?;
     apply_viewport_builder_to_window(egui_ctx, &window, viewport_builder);
     Ok(window)
 }
 
-/// Apply [`ViewportBuilder::with_monitor`] to freshly-built [`winit::window::WindowAttributes`].
+/// Apply [`ViewportBuilder::with_monitor`] to freshly-built [`winit::window::WindowBuilder`].
 ///
 /// Resolve the target monitor index → `MonitorHandle` and request borderless
 /// fullscreen on that output, so the window is created directly on the right
@@ -2217,10 +2156,10 @@ pub fn create_window(
 /// [`create_winit_window_attributes`] (the glow backend and per-viewport window
 /// creation do this) — otherwise `with_monitor` silently does nothing there.
 pub fn apply_monitor_to_window_attributes(
-    mut window_attributes: winit::window::WindowAttributes,
+    mut window_attributes: winit::window::WindowBuilder,
     viewport_builder: &ViewportBuilder,
     event_loop: &ActiveEventLoop,
-) -> winit::window::WindowAttributes {
+) -> winit::window::WindowBuilder {
     if let Some(idx) = viewport_builder.monitor {
         if let Some(monitor) = event_loop.available_monitors().nth(idx) {
             window_attributes = window_attributes
@@ -2238,7 +2177,7 @@ pub fn apply_monitor_to_window_attributes(
 pub fn create_winit_window_attributes(
     egui_ctx: &egui::Context,
     viewport_builder: ViewportBuilder,
-) -> winit::window::WindowAttributes {
+) -> winit::window::WindowBuilder {
     profiling::function_scope!();
 
     let ViewportBuilder {
@@ -2284,7 +2223,7 @@ pub fn create_winit_window_attributes(
         monitor: _, // Handled in `create_window` (needs ActiveEventLoop for monitor handle)
     } = viewport_builder;
 
-    let mut window_attributes = winit::window::WindowAttributes::default()
+    let mut window_attributes = winit::window::WindowBuilder::new()
         .with_title(title.unwrap_or_else(|| "egui window".to_owned()))
         .with_transparent(transparent.unwrap_or(false))
         .with_decorations(decorations.unwrap_or(true))
@@ -2376,7 +2315,7 @@ pub fn create_winit_window_attributes(
 
     #[cfg(all(feature = "wayland", target_os = "linux"))]
     if let Some(app_id) = _app_id {
-        use winit::platform::wayland::WindowAttributesExtWayland as _;
+        use winit::platform::wayland::WindowBuilderExtWayland as _;
         window_attributes = window_attributes.with_name(app_id, "");
     }
 
@@ -2413,7 +2352,7 @@ pub fn create_winit_window_attributes(
 
     #[cfg(all(feature = "x11", target_os = "linux"))]
     {
-        use winit::platform::x11::WindowAttributesExtX11 as _;
+        use winit::platform::x11::WindowBuilderExtX11 as _;
         if let Some(window_type) = _window_type {
             use winit::platform::x11::WindowType;
             window_attributes = window_attributes.with_x11_window_type(vec![match window_type {
@@ -2440,7 +2379,7 @@ pub fn create_winit_window_attributes(
 
     #[cfg(target_os = "windows")]
     {
-        use winit::platform::windows::WindowAttributesExtWindows as _;
+        use winit::platform::windows::WindowBuilderExtWindows as _;
         if let Some(enable) = _drag_and_drop {
             window_attributes = window_attributes.with_drag_and_drop(enable);
         }
@@ -2455,7 +2394,7 @@ pub fn create_winit_window_attributes(
 
     #[cfg(target_os = "macos")]
     {
-        use winit::platform::macos::WindowAttributesExtMacOS as _;
+        use winit::platform::macos::WindowBuilderExtMacOS as _;
         window_attributes = window_attributes
             .with_title_hidden(!_title_shown.unwrap_or(true))
             .with_titlebar_buttons_hidden(!_titlebar_buttons_shown.unwrap_or(true))
@@ -2663,16 +2602,15 @@ pub fn short_window_event_description(event: &winit::event::WindowEvent) -> &'st
         WindowEvent::CursorLeft { .. } => "WindowEvent::CursorLeft",
         WindowEvent::MouseWheel { .. } => "WindowEvent::MouseWheel",
         WindowEvent::MouseInput { .. } => "WindowEvent::MouseInput",
-        WindowEvent::PinchGesture { .. } => "WindowEvent::PinchGesture",
+        WindowEvent::TouchpadMagnify { .. } => "WindowEvent::TouchpadMagnify",
         WindowEvent::RedrawRequested => "WindowEvent::RedrawRequested",
-        WindowEvent::DoubleTapGesture { .. } => "WindowEvent::DoubleTapGesture",
-        WindowEvent::RotationGesture { .. } => "WindowEvent::RotationGesture",
-        WindowEvent::TouchpadPressure { .. } => "WindowEvent::TouchpadPressure",
+        WindowEvent::SmartMagnify { .. } => "WindowEvent::SmartMagnify",
+        WindowEvent::TouchpadRotate { .. } => "WindowEvent::TouchpadRotate",
         WindowEvent::AxisMotion { .. } => "WindowEvent::AxisMotion",
         WindowEvent::Touch { .. } => "WindowEvent::Touch",
         WindowEvent::ScaleFactorChanged { .. } => "WindowEvent::ScaleFactorChanged",
         WindowEvent::ThemeChanged { .. } => "WindowEvent::ThemeChanged",
         WindowEvent::Occluded { .. } => "WindowEvent::Occluded",
-        WindowEvent::PanGesture { .. } => "WindowEvent::PanGesture",
+        WindowEvent::TouchpadPressure { .. } => "WindowEvent::TouchpadPressure",
     }
 }

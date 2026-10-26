@@ -495,7 +495,7 @@ impl RangeSlider<'_> {
 
         // Paint it:
         if ui.is_rect_visible(response.rect) {
-            let rail_rect = slider_core::paint_rail(ui, &geom);
+            let rail_rect = slider_core::paint_rail(ui, &geom, self.core.rail_color);
 
             let low_center = geom.marker_center(geom.position_from_value(low), &rail_rect);
             let high_center = geom.marker_center(geom.position_from_value(high), &rail_rect);
