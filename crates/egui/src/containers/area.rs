@@ -776,9 +776,16 @@ fn automatic_area_position(ctx: &Context, constrain_rect: Rect, layer_id: LayerI
     });
     existing.sort_by_key(|r| r.left().round() as i32);
 
+    // Traverse fork: place new windows in the space left by panels like egui 0.27 did, instead of
+    // in their constrain rect, which may extend past the screen.
+    let available_rect = ctx
+        .pass_state(|state| state.root_ui_available_rect)
+        .or_else(|| ctx.prev_pass_state(|state| state.root_ui_available_rect))
+        .unwrap_or(constrain_rect);
+
     let spacing = 16.0;
-    let left = constrain_rect.left() + spacing;
-    let top = constrain_rect.top() + spacing;
+    let left = available_rect.left() + spacing;
+    let top = available_rect.top() + spacing;
 
     if existing.is_empty() {
         return pos2(left, top);
@@ -813,7 +820,7 @@ fn automatic_area_position(ctx: &Context, constrain_rect: Rect, layer_id: LayerI
 
     // Find first column with some available space at the bottom of it:
     for col_bb in &column_bbs {
-        if col_bb.bottom() < constrain_rect.center().y {
+        if col_bb.bottom() < available_rect.center().y {
             return pos2(col_bb.left(), col_bb.bottom() + spacing);
         }
     }
@@ -821,7 +828,7 @@ fn automatic_area_position(ctx: &Context, constrain_rect: Rect, layer_id: LayerI
     // Maybe we can fit a new column?
     #[expect(clippy::unwrap_used)]
     let rightmost = column_bbs.last().unwrap().right();
-    if rightmost + 200.0 < constrain_rect.right() {
+    if rightmost + 200.0 < available_rect.right() {
         return pos2(rightmost + spacing, top);
     }
 
