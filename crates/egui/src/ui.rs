@@ -523,8 +523,10 @@ impl Ui {
     pub fn disable(&mut self) {
         self.enabled = false;
         if self.is_visible() {
+            // Traverse fork: gray out disabled widgets towards the non-interactive background like
+            // egui 0.27 did, instead of making them translucent.
             self.painter
-                .multiply_opacity(self.visuals().disabled_alpha());
+                .set_fade_to_color(Some(self.visuals().fade_out_to_color()));
         }
     }
 

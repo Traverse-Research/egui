@@ -118,6 +118,11 @@ impl Painter {
         self.fade_to_color != Some(Color32::TRANSPARENT) && !self.ctx.will_discard()
     }
 
+    /// If set, colors of all shapes are moved closer to this color.
+    pub(crate) fn set_fade_to_color(&mut self, fade_to_color: Option<Color32>) {
+        self.fade_to_color = fade_to_color;
+    }
+
     /// If `false`, nothing added to the painter will be visible
     pub fn set_invisible(&mut self) {
         self.fade_to_color = Some(Color32::TRANSPARENT);

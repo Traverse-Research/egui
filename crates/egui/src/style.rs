@@ -1274,6 +1274,11 @@ impl Visuals {
         self.window_stroke
     }
 
+    /// The color disabled widgets are grayed out towards.
+    pub fn fade_out_to_color(&self) -> Color32 {
+        self.widgets.noninteractive.weak_bg_fill
+    }
+
     /// Disabled widgets have their alpha modified by this.
     #[inline(always)]
     pub fn disabled_alpha(&self) -> f32 {
