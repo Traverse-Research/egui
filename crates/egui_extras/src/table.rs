@@ -437,9 +437,12 @@ impl<'a> TableBuilder<'a> {
     }
 
     fn available_width(&self) -> f32 {
+        // Traverse fork: reserve the full scroll bar width like egui 0.27, also for floating
+        // scroll bars, which Evolve's table layouts are tuned for.
+        let scroll = &self.ui.spacing().scroll;
         self.ui.available_rect_before_wrap().width()
             - (self.scroll_options.vscroll as i32 as f32)
-                * self.ui.spacing().scroll.allocated_width()
+                * (scroll.bar_inner_margin + scroll.bar_width + scroll.bar_outer_margin)
     }
 
     /// Reset all column widths.
