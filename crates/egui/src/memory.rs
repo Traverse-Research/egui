@@ -347,6 +347,17 @@ pub(crate) struct Focus {
 
     /// A cache of widget ids that are interested in focus with their corresponding rectangles.
     focus_widgets_cache: IdMap<Rect>,
+
+    /// While set, widgets cannot get keyboard focus. Reset at the start of every frame.
+    is_registration_disabled: bool,
+
+    /// The clip rect of each widget in [`Self::focus_widgets_cache`] this frame.
+    ///
+    /// Arrow keys move between widgets that share the clip rect of the focused widget wherever
+    /// they are, so they move on to the widgets scrolled out of view in the same scroll area.
+    /// Other widgets are only found where they are visible, as the ones scrolled out of view
+    /// in another scroll area lie where other widgets are shown.
+    clip_rects: IdMap<Rect>,
 }
 
 /// The widget with focus.
@@ -379,6 +390,8 @@ impl Focus {
     }
 
     fn begin_frame(&mut self, new_input: &crate::data::input::RawInput) {
+        self.is_registration_disabled = false;
+        self.clip_rects.clear();
         self.id_previous_frame = self.focused();
         if let Some(id) = self.id_next_frame.take() {
             self.focused_widget = Some(FocusWidget::new(id));
@@ -461,7 +474,19 @@ impl Focus {
         self.id_previous_frame == Some(id)
     }
 
+    fn not_interested_in_focus(&mut self, id: Id) {
+        self.focus_widgets_cache.remove(&id);
+        if self.focused() == Some(id) {
+            self.focused_widget = None;
+        }
+    }
+
     fn interested_in_focus(&mut self, id: Id) {
+        if self.is_registration_disabled {
+            self.not_interested_in_focus(id);
+            return;
+        }
+
         #[cfg(feature = "accesskit")]
         {
             if self.id_requested_by_accesskit == Some(id.accesskit_id()) {
@@ -550,8 +575,27 @@ impl Focus {
             }
         });
 
-        let current_rect = self.focus_widgets_cache.get(&current_focused.id)?;
+        let current_rect = *self.focus_widgets_cache.get(&current_focused.id)?;
+        let current_clip_rect = self.clip_rects.get(&current_focused.id).copied();
 
+        // Widgets in the same scroll area as the focused widget come first, so arrow keys go
+        // through all of its widgets before leaving it, including the ones scrolled out of view.
+        //
+        // Widgets in a 90° cone of the search direction come before the ones further to the side,
+        // which are only found when the cone is empty. Otherwise focus can't reach widgets that
+        // lie far to the side, such as a list that is far from the buttons below it.
+        //
+        // Lower ranks are better.
+        let rank = |shares_clip_rect: bool, is_in_search_cone: bool| match (
+            is_in_search_cone,
+            shares_clip_rect,
+        ) {
+            (true, true) => 0,
+            (true, false) => 1,
+            (false, true) => 2,
+            (false, false) => 3,
+        };
+        let mut best_rank = u8::MAX;
         let mut best_score = std::f32::INFINITY;
         let mut best_id = None;
 
@@ -559,6 +603,20 @@ impl Focus {
             if *candidate_id == current_focused.id {
                 continue;
             }
+
+            let candidate_clip_rect = self.clip_rects.get(candidate_id).copied();
+            let shares_clip_rect =
+                current_clip_rect.is_some() && candidate_clip_rect == current_clip_rect;
+            let candidate_rect = match candidate_clip_rect {
+                Some(clip_rect) if !shares_clip_rect => {
+                    let visible_rect = candidate_rect.intersect(clip_rect);
+                    if !visible_rect.is_positive() {
+                        continue;
+                    }
+                    visible_rect
+                }
+                _ => *candidate_rect,
+            };
 
             // There is a lot of room for improvement here.
             let to_candidate = vec2(
@@ -568,16 +626,19 @@ impl Focus {
 
             let acos_angle = to_candidate.normalized().dot(search_direction);
 
-            // Only interested in widgets that fall in a 90° cone (±45°)
-            // of the search direction.
+            // Interested in widgets that fall in a 90° cone (±45°) of the search direction first,
+            // and in the rest of the half plane in the search direction otherwise.
             let is_in_search_cone = 0.5_f32.sqrt() <= acos_angle;
-            if is_in_search_cone {
+            let is_in_search_half_plane = 0.0 < acos_angle;
+            if is_in_search_half_plane {
                 let distance = to_candidate.length();
 
                 // There is a lot of room for improvement here.
                 let score = distance / (acos_angle * acos_angle);
 
-                if score < best_score {
+                let rank = rank(shares_clip_rect, is_in_search_cone);
+                if rank < best_rank || (rank == best_rank && score < best_score) {
+                    best_rank = rank;
                     best_score = score;
                     best_id = Some(*candidate_id);
                 }
@@ -713,6 +774,25 @@ impl Memory {
     #[inline(always)]
     pub fn interested_in_focus(&mut self, id: Id) {
         self.focus_mut().interested_in_focus(id);
+    }
+
+    /// Records the clip rect of a widget that is interested in focus, see [`Focus::clip_rects`].
+    pub(crate) fn set_focus_widget_clip_rect(&mut self, id: Id, clip_rect: Rect) {
+        let focus = self.focus_mut();
+        if focus.focus_widgets_cache.contains_key(&id) {
+            focus.clip_rects.insert(id, clip_rect);
+        }
+    }
+
+    /// Stops the widgets created after this call from getting keyboard focus, including through
+    /// Tab and arrow key navigation, until it is called again with `true`. Widgets that have
+    /// focus lose it.
+    ///
+    /// Use this to keep keyboard navigation inside part of the user interface.
+    /// Resets to enabled at the start of every frame.
+    #[inline(always)]
+    pub fn set_focus_registration_enabled(&mut self, enabled: bool) {
+        self.focus_mut().is_registration_disabled = !enabled;
     }
 
     /// Stop editing of active [`TextEdit`](crate::TextEdit) (if any).
