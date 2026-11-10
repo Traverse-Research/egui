@@ -672,14 +672,19 @@ impl Ui {
 impl Ui {
     /// Check for clicks, drags and/or hover on a specific region of this [`Ui`].
     pub fn interact(&self, rect: Rect, id: Id, sense: Sense) -> Response {
-        self.ctx().create_widget(WidgetRect {
+        let response = self.ctx().create_widget(WidgetRect {
             id,
             layer_id: self.layer_id(),
             rect,
             interact_rect: self.clip_rect().intersect(rect),
             sense,
             enabled: self.enabled,
-        })
+        });
+        if sense.focusable {
+            self.ctx()
+                .memory_mut(|memory| memory.set_focus_widget_clip_rect(id, self.clip_rect()));
+        }
+        response
     }
 
     /// Deprecated: use [`Self::interact`] instead.
