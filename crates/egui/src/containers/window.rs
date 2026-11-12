@@ -792,7 +792,11 @@ fn resize_interaction(
             id,
             rect,
             interact_rect: rect,
-            sense: Sense::drag(),
+            // Don't use Sense::drag() since we don't want these to be focusable
+            sense: Sense {
+                focusable: false,
+                ..Sense::drag()
+            },
             enabled: true,
         });
         SideResponse {
@@ -1097,7 +1101,14 @@ impl TitleBar {
         let double_click_rect = self.rect.shrink2(vec2(32.0, 0.0));
 
         if ui
-            .interact(double_click_rect, self.id, Sense::click())
+            .interact(
+                double_click_rect,
+                self.id,
+                Sense {
+                    focusable: false,
+                    ..Sense::click()
+                },
+            )
             .double_clicked()
             && collapsible
         {

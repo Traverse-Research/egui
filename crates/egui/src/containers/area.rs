@@ -312,10 +312,18 @@ impl Area {
         let mut move_response = {
             let interact_id = layer_id.id.with("move");
             let sense = sense.unwrap_or_else(|| {
+                // Not focusable: the area itself shows no focus, only its contents should take it.
                 if movable {
-                    Sense::drag()
+                    Sense {
+                        focusable: false,
+                        ..Sense::drag()
+                    }
                 } else if interactable {
-                    Sense::click() // allow clicks to bring to front
+                    // allow clicks to bring to front
+                    Sense {
+                        focusable: false,
+                        ..Sense::click()
+                    }
                 } else {
                     Sense::hover()
                 }
